@@ -1198,6 +1198,10 @@ extension BrowserViewController: BrowserToolbarDelegate {
         if let selectedTab = tabManager.selectedTab {
             var activities = [UIActivity]()
 
+            let findInPageActivity = FindInPageActivity() {
+            }
+            activities.append(findInPageActivity)
+
             if #available(iOS 9.0, *) {
                 if (selectedTab.getHelper(name: ReaderMode.name()) as? ReaderMode)?.state != .Active {
                     let requestDesktopSiteActivity = RequestDesktopSiteActivity(requestMobileSite: selectedTab.desktopSite) {
