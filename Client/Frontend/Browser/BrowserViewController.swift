@@ -572,7 +572,7 @@ class BrowserViewController: UIViewController {
             make.edges.equalTo(self.footer)
         }
 
-        adjustFooterSize(nil)
+        updateSnackBarConstraints()
         footerBackground?.snp_remakeConstraints { make in
             make.bottom.left.right.equalTo(self.footer)
             make.height.equalTo(UIConstants.ToolbarHeight)
@@ -1318,7 +1318,7 @@ extension BrowserViewController: BrowserDelegate {
         return nil
     }
 
-    private func adjustFooterSize(top: UIView? = nil) {
+    private func updateSnackBarConstraints() {
         snackBars.snp_remakeConstraints { make in
             let bars = self.snackBars.subviews
             // if the keyboard is showing then ensure that the snackbars are positioned above it, otherwise position them above the toolbar/view bottom
@@ -1392,7 +1392,7 @@ extension BrowserViewController: BrowserDelegate {
 
     func showBar(bar: SnackBar, animated: Bool) {
         finishAddingBar(bar)
-        adjustFooterSize(bar)
+        updateSnackBarConstraints()
 
         bar.hide()
         view.layoutIfNeeded()
@@ -1410,9 +1410,7 @@ extension BrowserViewController: BrowserDelegate {
             }) { success in
                 // Really remove the bar
                 self.finishRemovingBar(bar)
-
-                // Adjust the footer size to only contain the bars
-                self.adjustFooterSize()
+                self.updateSnackBarConstraints()
             }
         }
     }
@@ -1424,7 +1422,7 @@ extension BrowserViewController: BrowserDelegate {
                 bar.removeFromSuperview()
             }
         }
-        self.adjustFooterSize()
+        self.updateSnackBarConstraints()
     }
 
     func browser(browser: Browser, didAddSnackbar bar: SnackBar) {
@@ -2395,7 +2393,7 @@ extension BrowserViewController: KeyboardHelperDelegate {
         keyboardState = state
         // if we are already showing snack bars, adjust them so they sit above the keyboard
         if snackBars.subviews.count > 0 {
-            adjustFooterSize(nil)
+            updateSnackBarConstraints()
         }
     }
 
@@ -2406,7 +2404,7 @@ extension BrowserViewController: KeyboardHelperDelegate {
         keyboardState = nil
         // if we are showing snack bars, adjust them so they are no longer sitting above the keyboard
         if snackBars.subviews.count > 0 {
-            adjustFooterSize(nil)
+            updateSnackBarConstraints()
         }
     }
 }
