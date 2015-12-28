@@ -50,6 +50,7 @@ class BrowserViewController: UIViewController {
     private var searchLoader: SearchLoader!
     private let snackBars = UIView()
     private let webViewContainerToolbar = UIView()
+    private var findInPageBar: FindInPageBar?
     private let findInPageContainer = UIView()
 
     // popover rotation handling
@@ -549,10 +550,11 @@ class BrowserViewController: UIViewController {
                 make.top.equalTo(self.header.snp_bottom)
             }
 
+            let findInPageHeight = (findInPageBar == nil) ? 0 : UIConstants.ToolbarHeight
             if let toolbar = self.toolbar {
-                make.bottom.equalTo(toolbar.snp_top)
+                make.bottom.equalTo(toolbar.snp_top).offset(-findInPageHeight)
             } else {
-                make.bottom.equalTo(self.view)
+                make.bottom.equalTo(self.view).offset(-findInPageHeight)
             }
         }
 
@@ -951,6 +953,33 @@ class BrowserViewController: UIViewController {
         let ua = newRequest.valueForHTTPHeaderField("User-Agent")
         webView.customUserAgent = ua != UserAgent.defaultUserAgent() ? ua : nil
     }
+
+    private func updateFindInPageVisibility(visible visible: Bool) {
+        if visible {
+            if findInPageBar == nil {
+                let findInPageBar = FindInPageBar()
+                self.findInPageBar = findInPageBar
+                findInPageBar.delegate = self
+                findInPageContainer.addSubview(findInPageBar)
+
+                findInPageBar.snp_makeConstraints { make in
+                    make.edges.equalTo(findInPageContainer)
+                    make.height.equalTo(UIConstants.ToolbarHeight)
+                }
+
+                updateViewConstraints()
+
+                findInPageBar.layoutIfNeeded()
+            }
+
+            self.findInPageBar?.becomeFirstResponder()
+        } else if let findInPageBar = self.findInPageBar {
+            findInPageBar.endEditing(true)
+            findInPageBar.removeFromSuperview()
+            self.findInPageBar = nil
+            updateViewConstraints()
+        }
+    }
 }
 
 /**
@@ -1211,6 +1240,7 @@ extension BrowserViewController: BrowserToolbarDelegate {
             var activities = [UIActivity]()
 
             let findInPageActivity = FindInPageActivity() {
+                self.updateFindInPageVisibility(visible: true)
             }
             activities.append(findInPageActivity)
 
@@ -2530,4 +2560,19 @@ class BlurWrapper: UIView {
 
 protocol Themeable {
     func applyTheme(themeName: String)
+}
+
+extension BrowserViewController: FindInPageBarDelegate {
+    func findInPage(findInPage: FindInPageBar, didTextChange text: String) {
+    }
+
+    func findInPage(findInPage: FindInPageBar, didFindNextWithText text: String) {
+    }
+
+    func findInPage(findInPage: FindInPageBar, didFindPreviousWithText text: String) {
+    }
+
+    func findInPageDidPressClose(findInPage: FindInPageBar) {
+        updateFindInPageVisibility(visible: false)
+    }
 }
