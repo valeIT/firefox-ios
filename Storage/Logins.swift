@@ -117,7 +117,7 @@ public protocol LoginUsageData {
     var timePasswordChanged: MicrosecondTimestamp { get set }
 }
 
-public class Login: CustomStringConvertible, LoginData, LoginUsageData, Equatable {
+public class Login: CustomStringConvertible, LoginData, LoginUsageData, Equatable, Hashable {
     public var guid: String
 
     public let credentials: NSURLCredential
@@ -155,6 +155,10 @@ public class Login: CustomStringConvertible, LoginData, LoginUsageData, Equatabl
 
             self._formSubmitURL = value
         }
+    }
+
+    public var hashValue: Int {
+        return guid.hashValue
     }
 
     // LoginUsageData. These defaults only apply to locally created records.

@@ -521,15 +521,17 @@ extension SQLiteHistory: BrowserHistory {
 }
 
 extension SQLiteHistory: Favicons {
-    // These two getter functions are only exposed for testing purposes (and aren't part of the public interface).
-    func getFaviconsForURL(url: String) -> Deferred<Maybe<Cursor<Favicon?>>> {
-        let sql = "SELECT iconID AS id, iconURL AS url, iconDate AS date, iconType AS type, iconWidth AS width FROM " +
+
+    public func getFaviconsForURL(url: String) -> Deferred<Maybe<Cursor<Favicon?>>> {
+        print(url)
+        let sql = "SELECT iconID, iconURL, iconDate, iconType, iconWidth FROM " +
             "\(ViewWidestFaviconsForSites), \(TableHistory) WHERE " +
-            "\(TableHistory).id = siteID AND \(TableHistory).url = ?"
-        let args: Args = [url]
+            "\(TableHistory).id = siteID AND \(TableHistory).url LIKE ?"
+        let args: Args = ["\(url)%"]
         return db.runQuery(sql, args: args, factory: SQLiteHistory.iconColumnFactory)
     }
 
+    // This getter functions are only exposed for testing purposes (and aren't part of the public interface).
     func getFaviconsForBookmarkedURL(url: String) -> Deferred<Maybe<Cursor<Favicon?>>> {
         let sql = "SELECT \(TableFavicons).id AS id, \(TableFavicons).url AS url, \(TableFavicons).date AS date, \(TableFavicons).type AS type, \(TableFavicons).width AS width FROM \(TableFavicons), \(TableBookmarks) WHERE \(TableBookmarks).faviconID = \(TableFavicons).id AND \(TableBookmarks).url IS ?"
         let args: Args = [url]

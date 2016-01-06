@@ -130,6 +130,12 @@ class LoginListViewController: UIViewController {
             activeLoginQuery = profile.logins.getAllLogins().bindQueue(dispatch_get_main_queue()) { result in
                 self.loginDataSource.cursor = result.successValue
                 self.tableView.reloadData()
+
+                // Check to see if the logins have favicons. If so, use them, if not, fetch away.
+                if let logins = result.successValue?.asArray() {
+                    // Fetch favicons we need
+                    self.loadFaviconsForLogins(logins)
+                }
                 return succeed()
             }
         }
@@ -163,6 +169,42 @@ class LoginListViewController: UIViewController {
     deinit {
         let notificationCenter = NSNotificationCenter.defaultCenter()
         notificationCenter.removeObserver(self, name: NotificationProfileDidFinishSyncing, object: nil)
+    }
+}
+
+// MARK: - Favicon Loading
+extension LoginListViewController {
+
+    private func loadFaviconsForLogins(logins: [Login]) {
+        logins.forEach { login in
+            loadFaviconsForLoginFromHistory(login).uponQueue(dispatch_get_main_queue()) { result in
+                self.updateRowForLogin(login, withFavicons: result.successValue ?? [])
+            }
+        }
+    }
+
+    private func loadFaviconsForLoginFromHistory(login: Login) -> Deferred<Maybe<[Favicon]>> {
+        return self.profile.favicons.getFaviconsForURL("\(login.hostname)/") >>== { favicons in
+            let filteredIcons = favicons.asArray().flatMap({ $0 })
+            return deferMaybe(filteredIcons)
+        }
+    }
+
+    private func updateRowForLogin(login: Login, withFavicons favicons: [Favicon]) {
+        // Find the row we want to update with the favicon
+        guard let indexPath = loginDataSource.indexPathForLogin(login) else {
+            return
+        }
+
+        self.loginDataSource.loginFaviconMap[login] = favicons
+
+        // Invalidate the cell that contains the updated login if it's visible. If not, it will get updated
+        // the next call to cellForIndexPath
+        if self.tableView.indexPathsForVisibleRows?.contains(indexPath) ?? false {
+            // TODO: Ideally we would want to reload the single cell but for some reason the contents of the 
+            // UITableViewCell get all messed up and animates everything to the left.
+            self.tableView.reloadData()
+        }
     }
 }
 
@@ -394,8 +436,24 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
 
     var cursor: Cursor<Login>?
 
+    var loginFaviconMap = [Login: [Favicon]]()
+
     func loginAtIndexPath(indexPath: NSIndexPath) -> Login {
         return loginsForSection(indexPath.section)[indexPath.row]
+    }
+
+    func indexPathForLogin(login: Login) -> NSIndexPath? {
+        guard let baseDomain = login.hostname.asURL?.baseDomain() else {
+            return nil
+        }
+
+        let firstChar = baseDomain.uppercaseString[baseDomain.startIndex]
+
+        guard let section = sectionIndexTitles()?.indexOf(String(firstChar)),
+              let row = loginsForSection(section).indexOf(login) else {
+            return nil
+        }
+        return NSIndexPath(forRow: row, inSection: section)
     }
 
     @objc func numberOfSectionsInTableView(tableView: UITableView) -> Int {
@@ -421,6 +479,10 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
         cell.style = .IconAndBothLabels
         cell.updateCellWithLogin(login)
 
+        let favicon = bestFittingFaviconForLogin(login)
+        if let faviconURL = favicon?.url.asURL {
+            cell.iconImageView.sd_setImageWithURL(faviconURL, placeholderImage: UIImage(named: "faviconFox"))
+        }
         return cell
     }
 
@@ -479,6 +541,14 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
                 return baseDomain1 < baseDomain2
             }
         }
+    }
+
+    private func bestFittingFaviconForLogin(login: Login) -> Favicon? {
+        var bestFitFavicon: Favicon?
+        loginFaviconMap[login]?.forEach { favicon in
+            bestFitFavicon = favicon
+        }
+        return bestFitFavicon
     }
 }
 

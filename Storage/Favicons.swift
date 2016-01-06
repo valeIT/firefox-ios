@@ -10,6 +10,11 @@ public protocol Favicons {
     func clearAllFavicons() -> Success
 
     /**
+     * Returns all favicons associated with the given URL.
+     */
+    func getFaviconsForURL(url: String) -> Deferred<Maybe<Cursor<Favicon?>>>
+
+    /**
      * Returns the ID of the added favicon.
      */
     func addFavicon(icon: Favicon) -> Deferred<Maybe<Int>>
