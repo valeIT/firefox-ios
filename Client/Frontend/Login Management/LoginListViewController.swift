@@ -198,12 +198,14 @@ extension LoginListViewController {
 
         self.loginDataSource.loginFaviconMap[login] = favicons
         if indexPath == loginDataSource.indexPathForLogin(login) && (self.tableView.indexPathsForVisibleRows?.contains(indexPath) ?? false) {
-            guard let loginCell = tableView.cellForRowAtIndexPath(indexPath) as? LoginTableViewCell,
-                  let iconURL = favicons.first?.url.asURL else {
+            guard let loginCell = tableView.cellForRowAtIndexPath(indexPath) as? LoginTableViewCell else {
                 return
             }
 
-            loginCell.iconImageView.sd_setImageWithURL(iconURL, placeholderImage: UIImage(named: "faviconFox"))
+            let targetSize = loginCell.iconImageView.frame.size
+            if let iconURL = loginDataSource.bestFittingFaviconForLogin(login, toFitImageSize: targetSize)?.url.asURL {
+                loginCell.iconImageView.sd_setImageWithURL(iconURL, placeholderImage: UIImage(named: "faviconFox"))
+            }
         }
     }
 }
@@ -457,6 +459,18 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
         return NSIndexPath(forRow: row, inSection: section)
     }
 
+    func bestFittingFaviconForLogin(login: Login, toFitImageSize targetSize: CGSize) -> Favicon? {
+        guard let favicons = loginFaviconMap[login] else {
+            return nil
+        }
+
+        let sizes = favicons.map { CGSize(width: $0.width ?? 0, height: $0.height ?? 0) }
+        let size = targetSize.sizeThatBestFitsFromSizes(sizes)
+
+        // Replace with `find` when that lands
+        return favicons.filter { CGSize(width: $0.width ?? 0, height: $0.height ?? 0) == size } .first
+    }
+
     @objc func numberOfSectionsInTableView(tableView: UITableView) -> Int {
         let numOfSections = sectionIndexTitles()?.count ?? 0
         if numOfSections == 0 {
@@ -480,7 +494,7 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
         cell.style = .IconAndBothLabels
         cell.updateCellWithLogin(login)
 
-        let favicon = loginFaviconMap[login]?.first
+        let favicon = bestFittingFaviconForLogin(login, toFitImageSize: cell.iconImageView.frame.size)
         if let faviconURL = favicon?.url.asURL {
             cell.iconImageView.sd_setImageWithURL(faviconURL, placeholderImage: UIImage(named: "faviconFox"))
         }

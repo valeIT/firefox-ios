@@ -6,6 +6,7 @@ import Foundation
 import UIKit
 import SnapKit
 import Storage
+import Shared
 
 @objc
 protocol LoginTableViewCellDelegate: class {
