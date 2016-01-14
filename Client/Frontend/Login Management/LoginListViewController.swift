@@ -197,13 +197,13 @@ extension LoginListViewController {
         }
 
         self.loginDataSource.loginFaviconMap[login] = favicons
+        if indexPath == loginDataSource.indexPathForLogin(login) && (self.tableView.indexPathsForVisibleRows?.contains(indexPath) ?? false) {
+            guard let loginCell = tableView.cellForRowAtIndexPath(indexPath) as? LoginTableViewCell,
+                  let iconURL = favicons.first?.url.asURL else {
+                return
+            }
 
-        // Invalidate the cell that contains the updated login if it's visible. If not, it will get updated
-        // the next call to cellForIndexPath
-        if self.tableView.indexPathsForVisibleRows?.contains(indexPath) ?? false {
-            // TODO: Ideally we would want to reload the single cell but for some reason the contents of the 
-            // UITableViewCell get all messed up and animates everything to the left.
-            self.tableView.reloadData()
+            loginCell.iconImageView.sd_setImageWithURL(iconURL, placeholderImage: UIImage(named: "faviconFox"))
         }
     }
 }
@@ -479,7 +479,7 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
         cell.style = .IconAndBothLabels
         cell.updateCellWithLogin(login)
 
-        let favicon = bestFittingFaviconForLogin(login)
+        let favicon = loginFaviconMap[login]?.first
         if let faviconURL = favicon?.url.asURL {
             cell.iconImageView.sd_setImageWithURL(faviconURL, placeholderImage: UIImage(named: "faviconFox"))
         }
@@ -541,14 +541,6 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
                 return baseDomain1 < baseDomain2
             }
         }
-    }
-
-    private func bestFittingFaviconForLogin(login: Login) -> Favicon? {
-        var bestFitFavicon: Favicon?
-        loginFaviconMap[login]?.forEach { favicon in
-            bestFitFavicon = favicon
-        }
-        return bestFitFavicon
     }
 }
 
