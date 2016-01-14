@@ -316,7 +316,8 @@ extension LoginListViewController: UITableViewDelegate {
         } else {
             tableView.deselectRowAtIndexPath(indexPath, animated: true)
             let login = loginDataSource.loginAtIndexPath(indexPath)
-            let detailViewController = LoginDetailViewController(profile: profile, login: login)
+            let favicon = loginDataSource.loginFaviconMap[login]?.first
+            let detailViewController = LoginDetailViewController(profile: profile, login: login, favicon: favicon)
             detailViewController.settingsDelegate = settingsDelegate
             navigationController?.pushViewController(detailViewController, animated: true)
         }
