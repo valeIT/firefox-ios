@@ -18,6 +18,10 @@ class NoSuchRecordError: MaybeErrorType {
     }
 }
 
+class BulkURLQueryRequiresAtLeastOne: MaybeErrorType {
+    var description: String = "Bulk URL query requires at least one URL"
+}
+
 func failOrSucceed<T>(err: NSError?, op: String, val: T) -> Deferred<Maybe<T>> {
     if let err = err {
         log.debug("\(op) failed: \(err.localizedDescription)")
@@ -344,6 +348,18 @@ extension SQLiteHistory: BrowserHistory {
         return site
     }
 
+    private class func iconColumnFactoryWithHistoryURL(row: SDRow) -> (String, Favicon)? {
+        if let iconType = row["iconType"] as? Int,
+            let iconURL = row["iconURL"] as? String,
+            let iconDate = row["iconDate"] as? Double,
+            let historyURL = row["historyURL"] as? String,
+            let _ = row["iconID"] as? Int {
+                let date = NSDate(timeIntervalSince1970: iconDate)
+                return (historyURL, Favicon(url: iconURL, date: date, type: IconType(rawValue: iconType)!))
+        }
+        return nil
+    }
+
     private class func iconColumnFactory(row: SDRow) -> Favicon? {
         if let iconType = row["iconType"] as? Int,
             let iconURL = row["iconURL"] as? String,
@@ -521,14 +537,18 @@ extension SQLiteHistory: BrowserHistory {
 }
 
 extension SQLiteHistory: Favicons {
+    public func getFaviconsForHistoryURLs(urls: [String]) -> Deferred<Maybe<Cursor<(String, Favicon)?>>> {
+        guard urls.count > 0 else {
+            return deferMaybe(BulkURLQueryRequiresAtLeastOne())
+        }
 
-    public func getFaviconsForURL(url: String) -> Deferred<Maybe<Cursor<Favicon?>>> {
-        print(url)
-        let sql = "SELECT iconID, iconURL, iconDate, iconType, iconWidth FROM " +
+        let likeStatements = urls.map { _ in "\(TableHistory).url LIKE ?" } .joinWithSeparator(" OR ")
+        let sql = "SELECT \(TableHistory).url as historyURL, iconID, iconURL, iconDate, iconType, iconWidth FROM " +
             "\(ViewWidestFaviconsForSites), \(TableHistory) WHERE " +
-            "\(TableHistory).id = siteID AND \(TableHistory).url LIKE ?"
-        let args: Args = ["\(url)%"]
-        return db.runQuery(sql, args: args, factory: SQLiteHistory.iconColumnFactory)
+            "\(TableHistory).id = siteID AND (\(likeStatements))"
+
+        let args: Args = urls.map { "\($0)%" as AnyObject }
+        return db.runQuery(sql, args: args, factory: SQLiteHistory.iconColumnFactoryWithHistoryURL)
     }
 
     // This getter functions are only exposed for testing purposes (and aren't part of the public interface).

@@ -131,12 +131,16 @@ class LoginListViewController: UIViewController {
                 self.loginDataSource.cursor = result.successValue
                 self.tableView.reloadData()
 
-                // Check to see if the logins have favicons. If so, use them, if not, fetch away.
-                if let logins = result.successValue?.asArray() {
-                    // Fetch favicons we need
-                    self.loadFaviconsForLogins(logins)
+                guard let logins = result.successValue?.asArray() else {
+                    return succeed()
                 }
-                return succeed()
+
+                // Fetch favicons we need
+                return self.loadFaviconsForLogins(logins).bindQueue(dispatch_get_main_queue()) { result in
+                    self.loginDataSource.guidFaviconMap = result.successValue ?? [GUID: [Favicon]]()
+                    self.tableView.reloadData()
+                    return succeed()
+                }
             }
         }
     }
@@ -175,37 +179,16 @@ class LoginListViewController: UIViewController {
 // MARK: - Favicon Loading
 extension LoginListViewController {
 
-    private func loadFaviconsForLogins(logins: [Login]) {
-        logins.forEach { login in
-            loadFaviconsForLoginFromHistory(login).uponQueue(dispatch_get_main_queue()) { result in
-                self.updateRowForLogin(login, withFavicons: result.successValue ?? [])
+    private func loadFaviconsForLogins(logins: [Login]) -> Deferred<Maybe<[GUID: [Favicon]]>> {
+        let urls = logins.map { $0.hostname }
+        return self.profile.favicons.getFaviconsForHistoryURLs(urls) >>== { favicons in
+            let filteredFavicons = favicons.asArray().flatMap { $0 }
+            var loginFaviconMap = [GUID: [Favicon]]()
+            logins.forEach { login in
+                // Filter by login hostname -> history URL and extract out the favicon
+                loginFaviconMap[login.guid] = filteredFavicons.filter { $0.0.hasPrefix(login.hostname) } .map { $0.1 } ?? []
             }
-        }
-    }
-
-    private func loadFaviconsForLoginFromHistory(login: Login) -> Deferred<Maybe<[Favicon]>> {
-        return self.profile.favicons.getFaviconsForURL("\(login.hostname)/") >>== { favicons in
-            let filteredIcons = favicons.asArray().flatMap({ $0 })
-            return deferMaybe(filteredIcons)
-        }
-    }
-
-    private func updateRowForLogin(login: Login, withFavicons favicons: [Favicon]) {
-        // Find the row we want to update with the favicon
-        guard let indexPath = loginDataSource.indexPathForLogin(login) else {
-            return
-        }
-
-        self.loginDataSource.loginFaviconMap[login] = favicons
-        if indexPath == loginDataSource.indexPathForLogin(login) && (self.tableView.indexPathsForVisibleRows?.contains(indexPath) ?? false) {
-            guard let loginCell = tableView.cellForRowAtIndexPath(indexPath) as? LoginTableViewCell else {
-                return
-            }
-
-            let targetSize = loginCell.iconImageView.frame.size
-            if let iconURL = loginDataSource.bestFittingFaviconForLogin(login, toFitImageSize: targetSize)?.url.asURL {
-                loginCell.iconImageView.sd_setImageWithURL(iconURL, placeholderImage: UIImage(named: "faviconFox"))
-            }
+            return deferMaybe(loginFaviconMap)
         }
     }
 }
@@ -318,7 +301,7 @@ extension LoginListViewController: UITableViewDelegate {
         } else {
             tableView.deselectRowAtIndexPath(indexPath, animated: true)
             let login = loginDataSource.loginAtIndexPath(indexPath)
-            let favicon = loginDataSource.loginFaviconMap[login]?.first
+            let favicon = loginDataSource.guidFaviconMap[login.guid]?.first
             let detailViewController = LoginDetailViewController(profile: profile, login: login, favicon: favicon)
             detailViewController.settingsDelegate = settingsDelegate
             navigationController?.pushViewController(detailViewController, animated: true)
@@ -439,19 +422,15 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
 
     var cursor: Cursor<Login>?
 
-    var loginFaviconMap = [Login: [Favicon]]()
+    var guidFaviconMap = [GUID: [Favicon]]()
 
     func loginAtIndexPath(indexPath: NSIndexPath) -> Login {
         return loginsForSection(indexPath.section)[indexPath.row]
     }
 
     func indexPathForLogin(login: Login) -> NSIndexPath? {
-        guard let baseDomain = login.hostname.asURL?.baseDomain() else {
-            return nil
-        }
-
-        let firstChar = baseDomain.uppercaseString[baseDomain.startIndex]
-
+        let baseString = baseStringForLogin(login)
+        let firstChar = baseString.uppercaseString[baseString.startIndex]
         guard let section = sectionIndexTitles()?.indexOf(String(firstChar)),
               let row = loginsForSection(section).indexOf(login) else {
             return nil
@@ -460,7 +439,7 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
     }
 
     func bestFittingFaviconForLogin(login: Login, toFitImageSize targetSize: CGSize) -> Favicon? {
-        guard let favicons = loginFaviconMap[login] else {
+        guard let favicons = guidFaviconMap[login.guid] else {
             return nil
         }
 
@@ -516,18 +495,20 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
         return sectionIndexTitles()?[section]
     }
 
+    // Use the base domain as the string to index by if available. If not, fallback to login.hostname.
+    private func baseStringForLogin(login: Login) -> String {
+        return login.hostname.asURL?.baseDomain() ?? login.hostname
+    }
+
     private func sectionIndexTitles() -> [String]? {
         guard cursor?.count > 0 else {
             return nil
         }
 
         var firstHostnameCharacters = [Character]()
-        cursor?.forEach { login in
-            guard let login = login, let baseDomain = login.hostname.asURL?.baseDomain() else {
-                return
-            }
-
-            let firstChar = baseDomain.uppercaseString[baseDomain.startIndex]
+        cursor?.asArray().forEach { login in
+            let baseString = baseStringForLogin(login)
+            let firstChar = baseString.uppercaseString[baseString.startIndex]
             if !firstHostnameCharacters.contains(firstChar) {
                 firstHostnameCharacters.append(firstChar)
             }
@@ -542,13 +523,23 @@ private class LoginCursorDataSource: NSObject, UITableViewDataSource {
         }
 
         let titleForSectionAtIndex = sectionTitles[section]
-        let logins = cursor?.filter { $0?.hostname.asURL?.baseDomain()?.uppercaseString.startsWith(titleForSectionAtIndex) ?? false }
+        let logins = cursor?.asArray().filter { login in
+            return baseStringForLogin(login).uppercaseString.startsWith(titleForSectionAtIndex) ?? false
+        }
+
         let flattenLogins = logins?.flatMap { $0 } ?? []
         return flattenLogins.sort { login1, login2 in
-            let baseDomain1 = login1.hostname.asURL?.baseDomain()
-            let baseDomain2 = login2.hostname.asURL?.baseDomain()
-            let host1 = login1.hostname.asURL?.host
-            let host2 = login2.hostname.asURL?.host
+            // If we can URL-ize the hostnames, order by checking the base domain and host. If that's not
+            // possible then fall back to the baseString which is most likely a schemeless URL.
+            guard let login1URL = login1.hostname.asURL,
+                      login2URL = login2.hostname.asURL else {
+                return baseStringForLogin(login1) < baseStringForLogin(login2)
+            }
+
+            let baseDomain1 = login1URL.baseDomain()
+            let baseDomain2 = login2URL.baseDomain()
+            let host1 = login1URL.host
+            let host2 = login2URL.host
 
             if baseDomain1 == baseDomain2 {
                 return host1 < host2
