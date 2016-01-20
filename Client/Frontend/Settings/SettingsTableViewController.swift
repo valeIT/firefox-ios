@@ -14,6 +14,7 @@ private let Bug1204635_S1 = NSLocalizedString("Clear Everything", tableName: "Cl
 private let Bug1204635_S2 = NSLocalizedString("Are you sure you want to clear all of your data? This will also close all open tabs.", tableName: "ClearPrivateData", comment: "Message shown in the dialog prompting users if they want to clear everything")
 private let Bug1204635_S3 = NSLocalizedString("Clear", tableName: "ClearPrivateData", comment: "Used as a button label in the dialog to Clear private data dialog")
 private let Bug1204635_S4 = NSLocalizedString("Cancel", tableName: "ClearPrivateData", comment: "Used as a button label in the dialog to cancel clear private data dialog")
+private let Bug1209692 = NSLocalizedString("Sign in to get your tabs, bookmarks and passwords from your other devices.", comment: "value prop")
 
 // A base TableViewCell, to help minimize initialization and allow recycling.
 class SettingsTableViewCell: UITableViewCell {
@@ -295,6 +296,7 @@ class SettingsTableViewController: UITableViewController {
     }
 
     @objc private func SELfirefoxAccountDidChange() {
+        settings = generateSettings()
         self.tableView.reloadData()
     }
 
@@ -328,12 +330,22 @@ class SettingsTableViewController: UITableViewController {
     override func tableView(tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         let headerView = tableView.dequeueReusableHeaderFooterViewWithIdentifier(SectionHeaderIdentifier) as! SettingsTableSectionHeaderFooterView
         let sectionSetting = settings[section]
+
         if let sectionTitle = sectionSetting.title?.string {
             headerView.titleLabel.text = sectionTitle
+            if sectionTitle == Bug1209692 {
+                headerView.titleAlignment = .Top
+                headerView.titleLabel.numberOfLines = 0
+                headerView.showBottomBorder = false
+
+                headerView.titleLabel.snp_updateConstraints { make in
+                    make.right.equalTo(headerView).offset(-70)
+                }
+            }
         }
 
         // Hide the top border for the top section to avoid having a double line at the top
-        if section == 0 {
+        if section == 0 || (!profile.hasAccount() && section == 2) {
             headerView.showTopBorder = false
         } else {
             headerView.showTopBorder = true

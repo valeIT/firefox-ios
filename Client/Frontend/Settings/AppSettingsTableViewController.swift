@@ -72,9 +72,13 @@ class AppSettingsTableViewController: SettingsTableViewController {
                 // With a Firefox Account:
                 AccountStatusSetting(settings: self),
                 SyncNowSetting(settings: self)
-            ] + accountChinaSyncSetting + accountDebugSettings),
-            SettingSection(title: NSAttributedString(string: NSLocalizedString("General", comment: "General settings section title")), children: generalSettings)
-        ]
+            ] + accountChinaSyncSetting + accountDebugSettings)]
+
+        if !profile.hasAccount() {
+            settings += [SettingSection(title: NSAttributedString(string: NSLocalizedString("Sign in to get your tabs, bookmarks and passwords from your other devices.", comment: "Support section title")), children: [])]
+        }
+
+        settings += [ SettingSection(title: NSAttributedString(string: NSLocalizedString("General", comment: "General settings section title")), children: generalSettings)]
 
         var privacySettings = [Setting]()
         if AppConstants.MOZ_LOGIN_MANAGER {
