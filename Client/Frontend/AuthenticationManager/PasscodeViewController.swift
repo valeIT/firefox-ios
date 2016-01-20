@@ -4,6 +4,9 @@
 
 import Foundation
 import SnapKit
+import Shared
+
+let KeychainKeyPasscode = "AppPasscode"
 
 private struct PasscodeUX {
     static let TitleVerticalSpacing: CGFloat = 32
@@ -23,9 +26,9 @@ class PasscodeInputView: UIView, UIKeyInput {
 
     var digitFont: UIFont = UIConstants.PasscodeEntryFont
 
-    var blankCharacter: Character = "-"
+    let blankCharacter: Character = "-"
 
-    var filledCharacter: Character = "•"
+    let filledCharacter: Character = "•"
 
     private let passcodeSize: Int
 
@@ -81,6 +84,7 @@ class PasscodeInputView: UIView, UIKeyInput {
         }
     }
 
+    // Required for implementing UIKeyInput
     @objc func deleteBackward() {}
 
     override func drawRect(rect: CGRect) {
@@ -145,21 +149,22 @@ private class PasscodePane: UIView {
 /**
  Enum describing the three modes available for configuring the PasscodeViewController
 
- - NewPasscode:     User is setting up a new passcode. Requires input and confirmation panes.
- - EnterPasscode:   User is entering their passcode. A single pane is displayed asking for their code.
- - TurnOffPasscode: User is turning off passcode support so we display input and confirmation panes.
+ - NewPasscode:         User is setting up a new passcode. Requires input and confirmation panes.
+ - ValidatePasscode:    User is entering their passcode. A single pane is displayed asking for their code.
+ - ChangePasscode:      User is changing passcode so entering/inputting new panes are shown.
  */
 enum PasscodeEntryType {
     case NewPasscode
-    case EnterPasscode
-    case TurnOffPasscode
+    case ValidatePasscode
+    case ChangePasscode
 }
 
 /// Delegate available for PasscodeViewController consumers to be notified of the validation/entry of a passcode.
 @objc protocol PasscodeEntryDelegate: class {
-    func passcodeValidationDidSucceed()
-    func passcodeValidationDidFail()
-    func didCreateNewPasscode(passcode: String)
+    func passcodeValidationDidSucceed(viewController: PasscodeViewController)
+    func passcodeValidationDidFail(viewController: PasscodeViewController)
+    func didCreateNewPasscode(viewController: PasscodeViewController)
+    func didRemovePasscode(viewController: PasscodeViewController)
 }
 
 /// View controller which can be configured to manage creation, removal, and entering of a passcode.
@@ -251,13 +256,13 @@ class PasscodeViewController: UIViewController {
         let turnOffPasscode = NSLocalizedString("Turn Passcode Off", tableName: "AuthenticationManager", comment: "Title for setting to turn off passcode")
         let setPasscode = NSLocalizedString("Set Passcode", tableName: "AuthenticationManager", comment: "Screen title for Set Passcode")
         switch type {
-        case .EnterPasscode:
+        case .ValidatePasscode:
             panes = [PasscodePane(title: enterPasscode)]
             title = enterPasscode
         case .NewPasscode:
             panes = [PasscodePane(title: enterPasscode), PasscodePane(title: reenterPasscode)]
             title = setPasscode
-        case .TurnOffPasscode:
+        case .ChangePasscode:
             panes = [PasscodePane(title: enterPasscode), PasscodePane(title: reenterPasscode)]
             title = turnOffPasscode
         }
@@ -270,28 +275,48 @@ class PasscodeViewController: UIViewController {
 
 extension PasscodeViewController: PasscodeInputViewDelegate {
     func passcodeInputView(inputView: PasscodeInputView, didFinishEnteringCode code: String) {
-        if passcodeEntryType == .EnterPasscode {
-            if true {
-                delegate?.passcodeValidationDidSucceed()
-            } else {
-                delegate?.passcodeValidationDidFail()
-            }
-        } else if currentPaneIndex == 0 {
-            confirmCode = code
-            scrollToNextPane()
-            let nextPane = panes[currentPaneIndex]
-            nextPane.codeInputView.becomeFirstResponder()
-            nextPane.codeInputView.delegate = self
-        } else if currentPaneIndex == 1 {
-            if confirmCode == code {
-                delegate?.didCreateNewPasscode(code)
-            } else {
-                scrollToPreviousPane()
-                confirmCode = nil
-                let previousPane = panes[currentPaneIndex]
-                panes.forEach { $0.codeInputView.resetCode() }
-                previousPane.codeInputView.becomeFirstResponder()
-            }
-        }
+//        if passcodeEntryType == .EnterPasscode {
+//            if let passcode = KeychainWrapper.stringForKey(KeychainKeyPasscode) where passcode == code {
+//                delegate?.passcodeValidationDidSucceed(self)
+//            } else {
+//                delegate?.passcodeValidationDidFail(self)
+//            }
+//        } else if currentPaneIndex == 0 {
+//            confirmCode = code
+//            scrollToNextPane()
+//            let nextPane = panes[currentPaneIndex]
+//            nextPane.codeInputView.becomeFirstResponder()
+//            nextPane.codeInputView.delegate = self
+//        } else if currentPaneIndex == 1 {
+//            if confirmCode == code {
+//                if passcodeEntryType == .NewPasscode {
+//                    storeNewPasscode(code)
+//                    delegate?.didCreateNewPasscode(self)
+//                } else if passcodeEntryType == .TurnOffPasscode {
+//                    if let existingPasscode = retrievePasscode() where existingPasscode == code {
+//                        clearExistingPasscode()
+//                        delegate?.didRemovePasscode(self)
+//                    }
+//                }
+//            } else {
+//                scrollToPreviousPane()
+//                confirmCode = nil
+//                let previousPane = panes[currentPaneIndex]
+//                panes.forEach { $0.codeInputView.resetCode() }
+//                previousPane.codeInputView.becomeFirstResponder()
+//            }
+//        }
+    }
+
+    private func storeNewPasscode(code: String) {
+        KeychainWrapper.setString(code, forKey: KeychainKeyPasscode)
+    }
+
+    private func retrievePasscode() -> String? {
+        return KeychainWrapper.stringForKey(KeychainKeyPasscode)
+    }
+
+    private func clearExistingPasscode() {
+        KeychainWrapper.removeObjectForKey(KeychainKeyPasscode)
     }
 }

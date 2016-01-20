@@ -4,6 +4,7 @@
 
 import Foundation
 import UIKit
+import Shared
 
 private let ImmediatelyInSeconds: Int32 = 0
 private let OneMinuteInSeconds: Int32 = 1 * 60
@@ -26,8 +27,11 @@ private extension NSAttributedString {
 }
 
 class TurnPasscodeOnSetting: Setting {
+    var passcodeDelegate: PasscodeEntryDelegate?
+
     init(settings: SettingsTableViewController, delegate: SettingsDelegate? = nil) {
         let title = NSLocalizedString("Turn Passcode On", tableName: "AuthenticationManager", comment: "Title for setting to turn on passcode")
+        passcodeDelegate = settings as? PasscodeEntryDelegate
         super.init(title: NSAttributedString(string: title, attributes: [NSForegroundColorAttributeName: UIConstants.TableViewRowTextColor]),
                    delegate: delegate)
     }
@@ -35,20 +39,25 @@ class TurnPasscodeOnSetting: Setting {
     override func onClick(navigationController: UINavigationController?) {
         // Navigate to passcode configuration screen
         let passcodeController = PasscodeViewController(passcodeEntryType: .NewPasscode)
+        passcodeController.delegate = passcodeDelegate
         let passcodeNav = UINavigationController(rootViewController: passcodeController)
         navigationController?.presentViewController(passcodeNav, animated: true, completion: nil)
     }
 }
 
 class TurnPasscodeOffSetting: Setting {
+    var passcodeDelegate: PasscodeEntryDelegate?
+
     init(settings: SettingsTableViewController, delegate: SettingsDelegate? = nil) {
         let title = NSLocalizedString("Turn Passcode Off", tableName: "AuthenticationManager", comment: "Title for setting to turn off passcode")
+        passcodeDelegate = settings as? PasscodeEntryDelegate
         super.init(title: NSAttributedString(string: title, attributes: [NSForegroundColorAttributeName: UIConstants.TableViewRowTextColor]),
                    delegate: delegate)
     }
 
     override func onClick(navigationController: UINavigationController?) {
         let passcodeController = PasscodeViewController(passcodeEntryType: .TurnOffPasscode)
+        passcodeController.delegate = passcodeDelegate
         let passcodeNav = UINavigationController(rootViewController: passcodeController)
         navigationController?.presentViewController(passcodeNav, animated: true, completion: nil)
     }
@@ -113,7 +122,7 @@ class AuthenticationSettingsViewController: SettingsTableViewController {
 
     override func generateSettings() -> [SettingSection] {
 
-        if false {
+        if let _ = KeychainWrapper.stringForKey(KeychainKeyPasscode) {
             return passcodeEnabledSettings()
         } else {
             return passcodeDisabledSettings()
@@ -156,7 +165,6 @@ class AuthenticationSettingsViewController: SettingsTableViewController {
             ChangePasscodeSetting(settings: self, delegate: nil, enabled: false)
         ])
 
-        let prefs = profile.prefs
         let requirePasscodeSection = SettingSection(title: nil, children: [
             RequirePasscodeSetting(settings: self, delegate: nil, requireInterval: profile.prefs.intForKey(PrefKeyRequirePasscodeInterval), enabled: false),
         ])
@@ -167,5 +175,24 @@ class AuthenticationSettingsViewController: SettingsTableViewController {
         ]
 
         return settings
+    }
+}
+
+extension AuthenticationSettingsViewController: PasscodeEntryDelegate {
+
+    func passcodeValidationDidSucceed(viewController: PasscodeViewController) {
+        viewController.dismissViewControllerAnimated(true, completion: nil)
+    }
+
+    func passcodeValidationDidFail(viewController: PasscodeViewController) {
+        viewController.dismissViewControllerAnimated(true, completion: nil)
+    }
+
+    func didCreateNewPasscode(viewController: PasscodeViewController) {
+        viewController.dismissViewControllerAnimated(true, completion: nil)
+    }
+
+    func didRemovePasscode(viewController: PasscodeViewController) {
+        viewController.dismissViewControllerAnimated(true, completion: nil)
     }
 }
